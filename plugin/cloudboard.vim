@@ -11,6 +11,8 @@ endif
 
 let s:cloudboard_py = expand("<sfile>:p:h")."/cloudboard.py"
 
+exec 'pyfile '.expand("<sfile>:p:h")."/web_utils.py"
+
 let s:cloudboard_py_loaded = 0
 function! s:LoadCloudBoard()
     if s:cloudboard_py_loaded == 0
@@ -55,22 +57,51 @@ function! cloudboard#Init()
     endif
 endfunction
 
+function! cloudboard#AutoClear(nr)
+    if <SID>LoadCloudBoard() == 1
+        exec 'python cloudBoard.setAutoClear('.a:nr.')'
+    endif
+endfunction
+
 function! cloudboard#Yank(nr, str)
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.editComment('.a:nr.',"'.a:str.'")'
-        echo 'Copied into cloud register '.a:nr.'.'
     endif
 endfunction
 
 function! cloudboard#Put(nr)
     if <SID>LoadCloudBoard() == 1
-        exec 'python cloudBoard_clip = cloudBoard.readComment('.a:nr.')'
-        python vim.command("let @c='%s'" % urllib.unquote_plus(cloudBoard_clip).replace("'", "''"))
-        if len(@c) > 1
-            normal "cp
-        else
-            echohl WarningMsg | echo "No data in the cloud register." | echohl None
-        endif
+        exec 'python cloudBoard.readComment('.a:nr.')'
+    endif
+endfunction
+
+function! cloudboard#List()
+    if <SID>LoadCloudBoard() == 1
+        python cloudBoard.readComments()
+    endif
+endfunction
+
+function! cloudboard#Save(name, str)
+    if <SID>LoadCloudBoard() == 1
+        exec 'python cloudBoard.newFile("'.a:name.'","'.a:str.'")'
+    endif
+endfunction
+
+function! cloudboard#Load(name)
+    if <SID>LoadCloudBoard() == 1
+        exec 'python cloudBoard.readFile("'.a:name.'")'
+    endif
+endfunction
+
+function! cloudboard#Delete(name)
+    if <SID>LoadCloudBoard() == 1
+        exec 'python cloudBoard.deleteFile("'.a:name.'")'
+    endif
+endfunction
+
+function! cloudboard#ListFiles()
+    if <SID>LoadCloudBoard() == 1
+        python cloudBoard.readFiles()
     endif
 endfunction
 
@@ -80,9 +111,30 @@ function! s:UrlEncodeRange(line1, line2, dir)
     normal "zP
 endfunction
 
+function! cloudboard#BufffersList(A,L,P)
+    let all = range(0, bufnr('$'))
+    let res = []
+    for b in all
+        if buflisted(b)
+            let a = substitute(bufname(b),"\\","\/","g")
+            let a = substitute(a,".*/","","g")
+            if a != ''  && count(res, a) == 0 && a =~ a:A.'.*'
+                call add(res, a)
+            endif
+        endif
+    endfor
+    return res
+endfunction
+
 com! -nargs=* -range=% UrlEncode :call <SID>UrlEncodeRange(<line1>,<line2>,1)
 com! -nargs=* -range=% UrlDecode :call <SID>UrlEncodeRange(<line1>,<line2>,0)
 
 com! -nargs=0 CBInit :call cloudboard#Init()
+com! -nargs=1 CBAutoClear :call cloudboard#AutoClear(<f-args>)
 com! -nargs=1 -range=% CBYank :call cloudboard#Yank(<f-args>, cloudboard#UrlEncodeRange(<line1>, <line2>, 1))
 com! -nargs=1 CBPut :call cloudboard#Put(<f-args>)
+com! -nargs=0 CBList :call cloudboard#List()
+com! -nargs=1 -complete=customlist,cloudboard#BufffersList -range=% CBSave :call cloudboard#Save(<f-args>, cloudboard#UrlEncodeRange(<line1>, <line2>, 1))
+com! -nargs=1 -complete=customlist,cloudboard#BufffersList CBLoad :call cloudboard#Load(<f-args>)
+com! -nargs=1 -complete=customlist,cloudboard#BufffersList CBRm :call cloudboard#Delete(<f-args>)
+com! -nargs=0 CBListFiles :call cloudboard#ListFiles()

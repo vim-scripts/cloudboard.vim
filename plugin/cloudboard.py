@@ -6,22 +6,10 @@
 # Copyright (c) Brook Hong.  Distributed under the same terms as Vim itself.
 # See :help license
 
-import urllib, urllib2, base64
-import json,os
+import base64, os
 
-def request(url, headers, data=None, httpErrorHandler=None):
-    req = urllib2.Request(url, data)
-    for k in headers.keys():
-        req.add_header(k, headers[k])
-    try:
-        response = urllib2.urlopen(req)
-        jstr = response.read()
-    except urllib2.HTTPError, e:
-        jstr = '{"error": "%s"}' % e
-        if httpErrorHandler:
-            httpErrorHandler(e)
-    return json.loads(jstr)
-
+reload(sys)
+sys.setdefaultencoding('utf8')
 def initToken(username, password):
     basicAuth = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
     tokens = request('https://api.github.com/authorizations', {"Authorization": "Basic %s" % basicAuth})
@@ -91,7 +79,7 @@ class CloudBoard:
                 vim.command("unlet g:cloudBoardUser")
                 vim.command("unlet g:cloudBoardPass")
             else:
-                self.config['token'] = '1012d87ff4b053d01ce2f90bd266f2a047567bd3';
+                self.config['token'] = '1012d87ff4b053d01ce2f90bd266f2a047567bd3'
                 vim.command("let g:cloudBoardEmail=input('An unique name for your CloudBoard(Your Email Address preferred):')")
                 if vim.eval( 'g:cloudBoardEmail' ) != "":
                     self.config['gist'] = initGist(self.config['token'], "cloudboard.%s" % (vim.eval( 'g:cloudBoardEmail' )))
@@ -106,10 +94,54 @@ class CloudBoard:
             self.saveConfig()
         return ret
 
+    def newFile(self, name, content):
+        cf = request('https://api.github.com/gists/%s' % self.config['gist'], {'Authorization': 'token %s' % self.config['token']}, '{ "files": { "%s": { "content": "%s" } } }' % (name, content))
+        if "error" in cf:
+            vim.command("echohl WarningMsg | echo '%s'| echohl None" % cf['error'])
+        else:
+            vim.command("echo 'Saved into cloud file %s.'" % name)
+
+    def deleteFile(self, name):
+        cf = request('https://api.github.com/gists/%s' % self.config['gist'], {'Authorization': 'token %s' % self.config['token']}, '{ "files": { "%s": { "content": null } } }' % name)
+        if "error" in cf:
+            vim.command("echohl WarningMsg | echo '%s'| echohl None" % cf['error'])
+        else:
+            vim.command("echo 'Deleted cloud file %s.'" % name)
+
+    def readFile(self, name):
+        content = ""
+        gist = request('https://api.github.com/gists/%s' % self.config['gist'], {'Authorization': 'token %s' % self.config['token']})
+        if "error" in gist:
+            vim.command("echohl WarningMsg | echo '%s'| echohl None" % gist['error'])
+        else:
+            if "files" in gist and name in gist['files']:
+                furl = gist['files'][name]['raw_url']
+                content = request(furl, {'Authorization': 'token %s' % self.config['token']}, json_decode=False)
+                content = urllib.unquote_plus(content).replace("'", "''")
+                vim.command("let @c='%s'" % content)
+                vim.command('normal "cp')
+            else:
+                vim.command("echo 'No such file named %s.'" % name)
+
+    def readFiles(self):
+        content = ""
+        gist = request('https://api.github.com/gists/%s' % self.config['gist'], {'Authorization': 'token %s' % self.config['token']})
+        if "error" in gist:
+            vim.command("echohl WarningMsg | echo '%s'| echohl None" % gist['error'])
+        else:
+            if "files" in gist:
+                for name in gist['files']:
+                    furl = gist['files'][name]['raw_url']
+                    cmt = request(furl, {'Authorization': 'token %s' % self.config['token']}, json_decode=False)
+                    cmt = '%s %s %s\n%s\n' % ('>'*16, name, '<'*16, urllib.unquote_plus(cmt).replace("'", "''"))
+                    content = content + cmt
+                vim.command("let @c='%s'" % content)
+                vim.command('normal "cp')
+
     def commentsErrorHandler(self, e):
         if e.code == 404:
             self.listComments(['id'])
-            print "Fixed CloudBoard ID error, please try again."
+            vim.command("echo 'Fixed CloudBoard ID error, please try again.'")
         elif e.code == 401:
             self.initToken()
         else:
@@ -121,27 +153,60 @@ class CloudBoard:
         comments = []
         if 'gist' in self.config:
             comments = request('https://api.github.com/gists/%s/comments' % self.config['gist'], {'Authorization': 'token %s' % self.config['token']})
-            self.config['comments'] = map(lambda c: [c['id']], comments)
-            self.saveConfig()
-            comments = map(lambda c: [c[k] for k in fields], comments)
+            if 'error' in comments:
+                self.initToken()
+            else:
+                self.config['comments'] = map(lambda c: [c['id']], comments)
+                self.saveConfig()
+                comments = map(lambda c: [c[k] for k in fields], comments)
         return comments
 
     def newComment(self, clip):
         return request('https://api.github.com/gists/%s/comments' % self.config['gist'], {'Authorization': 'token %s' % self.config['token']}, '{ "body": "%s" }' % clip)
 
+    def readComments(self):
+        comments = self.listComments(['body'])
+        allcomts = ""
+        hid = 0
+        for c in comments:
+            cmt = '%s %d %s\n%s\n' % ('>'*16, hid, '<'*16, urllib.unquote_plus(c[0]).replace("'", "''"))
+            allcomts = allcomts + cmt
+            hid = hid + 1
+        vim.command("let @c='%s'" % allcomts)
+        vim.command('normal "cp')
+
+    def setAutoClear(self, nr):
+        if 'autoclear' not in self.config:
+            self.config['autoclear'] = []
+        if nr in self.config['autoclear']:
+            self.config['autoclear'].remove(nr)
+            vim.command("echo 'AutoClear has been disabled for cloud register %s.'" % nr)
+        else:
+            self.config['autoclear'].append(nr)
+            vim.command("echo 'AutoClear has been enabled for cloud register %s.'" % nr)
+        self.saveConfig()
+
     def readComment(self, nr):
         if 'comments' not in self.config:
             self.listComments(['id'])
-        comment = ""
         if 'comments' in self.config:
             if nr >= len(self.config['comments']):
                 self.listComments(['id'])
             if nr < len(self.config['comments']):
                 cid = self.config['comments'][nr][0]
                 cmt = request('https://api.github.com/gists/%s/comments/%s' % (self.config['gist'], cid), {'Authorization': 'token %s' % self.config['token']}, httpErrorHandler=self.commentsErrorHandler)
-                if "error" not in cmt:
+                if "error" in cmt:
+                    vim.command("echohl WarningMsg | echo '%s'| echohl None" % cmt['error'])
+                else:
                     comment = cmt['body'].encode('utf8')
-        return comment
+                    if len(comment) > 1:
+                        comment = urllib.unquote_plus(comment).replace("'", "''")
+                        vim.command("let @c='%s'" % comment)
+                        vim.command('normal "cp')
+                        if 'autoclear' in self.config and nr in self.config['autoclear']:
+                            request('https://api.github.com/gists/%s/comments/%s' % (self.config['gist'], cid), {'Authorization': 'token %s' % self.config['token']}, '{ "body": "." }', httpErrorHandler=self.commentsErrorHandler)
+                    else:
+                        vim.command("echo 'No data in the cloud register.'")
 
     def editComment(self, nr, clip):
         if 'comments' not in self.config:
@@ -157,16 +222,19 @@ class CloudBoard:
                     i = i+1
                 self.listComments(['id'])
             cid = self.config['comments'][nr][0]
-            return request('https://api.github.com/gists/%s/comments/%s' % (str(self.config['gist']), cid),
-                    {'Authorization': 'token %s' % str(self.config['token'])}, '{ "body": "%s" }' % clip,
+            cmt = request('https://api.github.com/gists/%s/comments/%s' % (self.config['gist'], cid),
+                    {'Authorization': 'token %s' % self.config['token']}, '{ "body": "%s" }' % clip,
                     httpErrorHandler=self.commentsErrorHandler)
-        return {"error": "not ready"}
+            if "error" in cmt:
+                vim.command("echohl WarningMsg | echo '%s'| echohl None" % cmt['error'])
+            else:
+                vim.command("echo 'Copied into cloud register %s.'" % nr)
 
     def clearComments(self):
         self.listComments(['id'])
         for c in self.config['comments']:
             cid = c[0]
-            request('https://api.github.com/gists/%s/comments/%s' % (str(self.config['gist']), cid), {'Authorization': 'token %s' % str(self.config['token'])}, '{"body": "."}')
+            request('https://api.github.com/gists/%s/comments/%s' % (self.config['gist'], cid), {'Authorization': 'token %s' % self.config['token']}, '{"body": "."}')
         self.saveConfig()
 
 cloudBoard = CloudBoard()

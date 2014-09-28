@@ -2,6 +2,10 @@ This is a mirror of http://www.vim.org/scripts/script.php?script_id=4994
 
 # cloudboard.vim
 
+https://github.com/brookhong/cloudboard.vim
+
+中文文档 https://brookhong.github.io/2014/09/27/cloudboard-cn.html
+
 A cloud-based clipboard, yank(copy) text into a numbered cloud register on a machine, put(paste) the text from the cloud register on another machine.
 
 It uses GITHUB's gist as the cloud service.
@@ -19,8 +23,29 @@ https://raw.githubusercontent.com/brookhong/brookhong.github.io/master/assets/im
 
 The number starts from 0, you can use anyone you'd like, for example:
 
-    :CBYank 12
-    :CBPut 12
+    :CBYank 5
+    :CBPut 5
+
+
+`:CBList` to put the contents from all cloud registers into current buffer.
+
+#### Auto Clear of Cloud Registers
+
+When AutoClear is turned on for a cloud register, the content of the cloud register will be cleared automatically after its content is read by a `CBPut` action.
+
+`:CBAutoClear 2` to toggle on/off AutoClear of cloud register 2.
+
+### Cloud Files
+
+Cloud files are named files stored in a GITHUB gist.
+
+    :CBSave test.c      to save selected range into a cloud file named test.c.
+    :CBLoad test.c      to load a cloud file test.c into current buffer.
+    :CBRm test.c        to delete a cloud file test.c.
+    :CBListFiles        to list all cloud files in the cloudboard gist.
+
+Loading cloud files requires two requests to GITHUB, thus cloud register is faster to be used as a clipboard across machines.
+Cloud files is better when the text is huge, especial in case of that you prefer to save them for long period.
 
 ### Recommended Mappings
 
@@ -29,12 +54,11 @@ The number starts from 0, you can use anyone you'd like, for example:
 
 # Installation
 
-https://github.com/brookhong/cloudboard.vim
-
-Your VIM must have python support, check it with `:version`.
+Your VIM must have python support, check it with `:python print 'hello'`.
 
 `Bundle 'brookhong/cloudboard.vim'`
 
 or
 
 Just unzip the zip file to your VIM file path, usually to be ~/.vim. 
+

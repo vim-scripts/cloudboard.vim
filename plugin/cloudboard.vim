@@ -11,12 +11,12 @@ endif
 
 let s:cloudboard_py = expand("<sfile>:p:h")."/cloudboard.py"
 
-exec 'pyfile '.expand("<sfile>:p:h")."/web_utils.py"
 
 let s:cloudboard_py_loaded = 0
 function! s:LoadCloudBoard()
     if s:cloudboard_py_loaded == 0
         if filereadable(s:cloudboard_py)
+            python import vim
             exec 'pyfile '.s:cloudboard_py
             let s:cloudboard_py_loaded = 1
         else
@@ -26,8 +26,9 @@ function! s:LoadCloudBoard()
     return s:cloudboard_py_loaded
 endfunction
 
-function! cloudboard#UrlEncode(str, dir)
+function! s:UrlEncode(str, dir)
     python << EOF
+import vim
 import urllib
 astr = vim.eval('a:str')
 dir = int(vim.eval('a:dir'))
@@ -46,72 +47,72 @@ EOF
     return l:urlStr
 endfunction
 
-function! cloudboard#UrlEncodeRange(line1, line2, dir)
+function! s:_UrlEncodeRange(line1, line2, dir)
     let l:str = join(getline(a:line1, a:line2), "\n")
-    return cloudboard#UrlEncode(l:str, a:dir)
+    return <SID>UrlEncode(l:str, a:dir)
 endfunction
 
-function! cloudboard#Init()
+function! s:Init()
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.initToken()'
     endif
 endfunction
 
-function! cloudboard#AutoClear(nr)
+function! s:AutoClear(nr)
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.setAutoClear('.a:nr.')'
     endif
 endfunction
 
-function! cloudboard#Yank(nr, str)
+function! s:Yank(nr, str)
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.editComment('.a:nr.',"'.a:str.'")'
     endif
 endfunction
 
-function! cloudboard#Put(nr)
+function! s:Put(nr)
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.readComment('.a:nr.')'
     endif
 endfunction
 
-function! cloudboard#List()
+function! s:List()
     if <SID>LoadCloudBoard() == 1
         python cloudBoard.readComments()
     endif
 endfunction
 
-function! cloudboard#Save(name, str)
+function! s:Save(name, str)
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.newFile("'.a:name.'","'.a:str.'")'
     endif
 endfunction
 
-function! cloudboard#Load(name)
+function! s:Load(name)
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.readFile("'.a:name.'")'
     endif
 endfunction
 
-function! cloudboard#Delete(name)
+function! s:Delete(name)
     if <SID>LoadCloudBoard() == 1
         exec 'python cloudBoard.deleteFile("'.a:name.'")'
     endif
 endfunction
 
-function! cloudboard#ListFiles()
+function! s:ListFiles()
     if <SID>LoadCloudBoard() == 1
         python cloudBoard.readFiles()
     endif
 endfunction
 
 function! s:UrlEncodeRange(line1, line2, dir)
-    let @z = cloudboard#UrlEncodeRange(a:line1, a:line2, a:dir)."\n"
+    let @z = <SID>_UrlEncodeRange(a:line1, a:line2, a:dir)."\n"
     exec a:line1.','.a:line2.'d'
     normal "zP
 endfunction
 
-function! cloudboard#BufffersList(A,L,P)
+function! s:BufffersList(A,L,P)
     let all = range(0, bufnr('$'))
     let res = []
     for b in all
@@ -129,12 +130,12 @@ endfunction
 com! -nargs=* -range=% UrlEncode :call <SID>UrlEncodeRange(<line1>,<line2>,1)
 com! -nargs=* -range=% UrlDecode :call <SID>UrlEncodeRange(<line1>,<line2>,0)
 
-com! -nargs=0 CBInit :call cloudboard#Init()
-com! -nargs=1 CBAutoClear :call cloudboard#AutoClear(<f-args>)
-com! -nargs=1 -range=% CBYank :call cloudboard#Yank(<f-args>, cloudboard#UrlEncodeRange(<line1>, <line2>, 1))
-com! -nargs=1 CBPut :call cloudboard#Put(<f-args>)
-com! -nargs=0 CBList :call cloudboard#List()
-com! -nargs=1 -complete=customlist,cloudboard#BufffersList -range=% CBSave :call cloudboard#Save(<f-args>, cloudboard#UrlEncodeRange(<line1>, <line2>, 1))
-com! -nargs=1 -complete=customlist,cloudboard#BufffersList CBLoad :call cloudboard#Load(<f-args>)
-com! -nargs=1 -complete=customlist,cloudboard#BufffersList CBRm :call cloudboard#Delete(<f-args>)
-com! -nargs=0 CBListFiles :call cloudboard#ListFiles()
+com! -nargs=0 CBInit :call <SID>Init()
+com! -nargs=1 CBAutoClear :call <SID>AutoClear(<f-args>)
+com! -nargs=1 -range=% CBYank :call <SID>Yank(<f-args>, <SID>_UrlEncodeRange(<line1>, <line2>, 1))
+com! -nargs=1 CBPut :call <SID>Put(<f-args>)
+com! -nargs=0 CBList :call <SID>List()
+com! -nargs=1 -complete=customlist,<SID>BufffersList -range=% CBSave :call <SID>Save(<f-args>, <SID>_UrlEncodeRange(<line1>, <line2>, 1))
+com! -nargs=1 -complete=customlist,<SID>BufffersList CBLoad :call <SID>Load(<f-args>)
+com! -nargs=1 -complete=customlist,<SID>BufffersList CBRm :call <SID>Delete(<f-args>)
+com! -nargs=0 CBListFiles :call <SID>ListFiles()
